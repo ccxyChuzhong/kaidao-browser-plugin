@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebDAV 订阅管理器</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>WebDAV 订阅管理器</h1>
+            <div class="header-buttons">
+                <button id="settingsBtn" class="icon-button" title="设置">⚙️</button>
+                <button id="pinBtn" class="icon-button" title="独立窗口">🗗</button>
+            </div>
+        </header>
+
+        <!-- 登录页面 -->
+        <div id="loginSection" class="section">
+            <h2>WebDAV 登录</h2>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="webdavUrl">WebDAV 地址:</label>
+                    <input type="text" id="webdavUrl" value="https://dav.jianguoyun.com/dav/" placeholder="WebDAV URL">
+                </div>
+                <div class="form-group">
+                    <label for="username">用户名:</label>
+                    <input type="text" id="username" placeholder="WebDAV 用户名">
+                </div>
+                <div class="form-group">
+                    <label for="password">密码:</label>
+                    <input type="password" id="password" placeholder="WebDAV 密码">
+                </div>
+                <button type="submit" class="primary-button">登录</button>
+            </form>
+        </div>
+
+        <!-- 主内容区域 - Tabs -->
+        <div id="mainSection" class="section hidden">
+            <div class="tab-container">
+                <div class="tab-header">
+                    <button class="tab-button active" data-tab="subscription">订阅信息</button>
+                    <button class="tab-button" data-tab="node">节点信息</button>
+                </div>
+                
+                <!-- 订阅标签页 -->
+                <div id="subscriptionTab" class="tab-content active">
+                    <div class="action-buttons">
+                        <button id="addSubscriptionBtn" class="primary-button">新增订阅</button>
+                        <button id="refreshBtn" class="secondary-button">刷新订阅</button>
+                        <button id="checkAllBtn" class="secondary-button">检测全部</button>
+                    </div>
+                    <div id="subscriptionList" class="list-container">
+                        <!-- 动态生成订阅列表 -->
+                    </div>
+                </div>
+                
+                <!-- 节点标签页 -->
+                <div id="nodeTab" class="tab-content">
+                    <div class="action-buttons">
+                        <button id="refreshNodeBtn" class="secondary-button">刷新节点</button>
+                    </div>
+                    <div id="nodeList" class="list-container">
+                        <!-- 动态生成节点列表 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 设置页面 -->
+        <div id="settingsSection" class="section hidden">
+            <h2>设置</h2>
+            
+            <h3>WebDAV 配置</h3>
+            <div class="form-group">
+                <label for="customWebdavPath">订阅路径:</label>
+                <input type="text" id="customWebdavPath" value="webdav-subscribe/subscription.json" placeholder="订阅路径">
+            </div>
+            <div class="form-group">
+                <label for="customNodePath">节点路径:</label>
+                <input type="text" id="customNodePath" value="webdav-subscribe/node-info.txt" placeholder="节点路径">
+            </div>
+            
+            <h3>检测配置</h3>
+            <div class="form-group">
+                <label for="maxConcurrent">最大并发数:</label>
+                <input type="number" id="maxConcurrent" value="5" min="1" max="20" placeholder="1-20">
+                <small class="help-text">同时检测的订阅数量，建议 3-10</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="checkTimeout">检测超时 (毫秒):</label>
+                <input type="number" id="checkTimeout" value="10000" min="1000" max="60000" step="1000" placeholder="1000-60000">
+                <small class="help-text">单个订阅检测的超时时间</small>
+            </div>
+            
+            <h3>代理配置</h3>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="enableProxyCheck"> 启用HTTP代理检测
+                </label>
+                <small class="help-text">通过本地HTTP代理服务器检测订阅可用性</small>
+            </div>
+
+            <div class="form-group" id="proxyGroup">
+                <label for="proxyUrl">HTTP代理地址:</label>
+                <input type="text" id="proxyUrl" value="http://127.0.0.1:7890" placeholder="http://127.0.0.1:7890">
+                <small class="help-text">格式: http://host:port (支持用户名密码: http://user:pass@host:port)</small>
+            </div>
+
+            <div class="form-group" id="proxyGroup1">
+                <button id="testProxyBtn" class="secondary-button">测试代理连接</button>
+                <span id="proxyTestResult" class="test-result"></span>
+            </div>
+            
+            <div class="action-buttons">
+                <button id="saveSettingsBtn" class="primary-button">保存设置</button>
+                <button id="logoutBtn" class="danger-button">退出登录</button>
+                <button id="backBtn" class="secondary-button">返回</button>
+            </div>
+        </div>
+
+        <!-- 新增/编辑订阅弹窗 -->
+        <div id="editModal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="modalTitle">新增订阅</h3>
+                    <button id="closeModal" class="close-button">&times;</button>
+                </div>
+                <form id="editForm">
+                    <div class="form-group">
+                        <label for="editName">名称:</label>
+                        <input type="text" id="editName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editUrl">订阅地址:</label>
+                        <input type="url" id="editUrl" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editRemark">备注:</label>
+                        <input type="text" id="editRemark">
+                    </div>
+                    <div class="form-group">
+                        <label for="editType">类型:</label>
+                        <select id="editType">
+                            <option value="clash">clash</option>
+                            <option value="xray">xray</option>
+                            <option value="xray+clash">xray+clash</option>
+                        </select>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="submit" class="primary-button">保存</button>
+                        <button type="button" id="cancelEdit" class="secondary-button">取消</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div id="statusBar" class="status-bar">
+            <span id="statusText">未登录</span>
+        </div>
+    </div>
+
+    <script src="../lib/webdav.js"></script>
+    <script src="../lib/subscription.js"></script>
+    <script src="../lib/clipboard.js"></script>
+    <script src="popup.js"></script>
+</body>
+</html>
