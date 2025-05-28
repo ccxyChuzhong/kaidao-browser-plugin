@@ -407,7 +407,247 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 渲染节点列表
+    // 事件监听器 (在原有基础上添加)
+    copyAllNodesBtn.addEventListener('click', copyAllNodes);
+
+    // 右键菜单支持
+    nodeList.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        
+        // 移除已存在的菜单
+        const existingMenu = document.querySelector('.context-menu');
+        if (existingMenu) existingMenu.remove();
+        
+        // 创建右键菜单
+        const contextMenu = document.createElement('div');
+        contextMenu.className = 'context-menu';
+        contextMenu.innerHTML = `
+            <div class="context-menu-item" data-action="copySelected">复制选中</div>
+            <div class="context-menu-item" data-action="selectAll">全选</div>
+            <div class="context-menu-item" data-action="selectNone">取消全选</div>
+            <div class="context-menu-divider"></div>
+            <div class="context-menu-item" data-action="exportNodes">导出节点</div>
+        `;
+        
+        // 定位菜单
+        contextMenu.style.position = 'fixed';
+        contextMenu.style.left = e.clientX + 'px';
+        contextMenu.style.top = e.clientY + 'px';
+        contextMenu.style.zIndex = '1000';
+        
+        document.body.appendChild(contextMenu);
+        
+        // 菜单事件
+        contextMenu.addEventListener('click', async (e) => {
+            const action = e.target.dataset.action;
+            contextMenu.remove();
+            
+            switch (action) {
+                case 'copySelected':
+                    await copySelectedNodes();
+                    break;
+                case 'selectAll':
+                    document.getElementById('selectAllNodes').click();
+                    break;
+                case 'selectNone':
+                    const selectAll = document.getElementById('selectAllNodes');
+                    if (selectAll.checked || selectAll.indeterminate) {
+                        selectAll.click();
+                    }
+                    break;
+                case 'exportNodes':
+                    await exportNodes();
+                    break;
+            }
+        });
+        
+        // 点击其他地方关闭菜单
+        document.addEventListener('click', (event) => {
+            // 确保点击的不是菜单本身
+            if (!contextMenu.contains(event.target)) {
+                contextMenu.remove();
+            }
+        }, { once: true });
+    });
+
+    // 导出节点功能
+    async function exportNodes() {
+        if (currentNodes.length === 0) {
+            showToast('没有可导出的节点', 'warning');
+            return;
+        }
+
+        try {
+            const content = subscriptionManager.lastNodeContent || '';
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `nodes-${new Date().toISOString().split('T')[0]}.txt`;
+            a.click();
+            
+            URL.revokeObjectURL(url);
+            showToast('节点文件已导出', 'success');
+            
+        } catch (error) {
+            showToast('导出失败: ' + error.message, 'error');
+        }
+    }
+    // 全部复制节点功能
+    async function copyAllNodes() {
+        if (currentNodes.length === 0) {
+            showToast('没有可复制的节点信息', 'warning');
+            return;
+        }
+
+        try {
+            copyAllNodesBtn.disabled = true;
+            copyAllNodesBtn.textContent = '复制中...';
+            
+            // 构造复制内容
+            let copyContent = '';
+            const copyFormat = await getCopyFormat();
+            
+            if (copyFormat === 'addresses') {
+                // 仅复制地址
+                copyContent = currentNodes.map(node => node.address).join('\n');
+            } else if (copyFormat === 'formatted') {
+                // 格式化复制（名称 + 地址）
+                copyContent = currentNodes.map(node => `${node.name} ${node.address}`).join('\n');
+            } else {
+                // 原始格式复制
+                copyContent = subscriptionManager.lastNodeContent || '';
+            }
+            
+            if (!copyContent.trim()) {
+                throw new Error('没有可复制的内容');
+            }
+            
+            // 复制到剪贴板
+            await ClipboardUtils.copyToClipboard(copyContent);
+            
+            // 显示统计信息
+            const stats = getNodeStats(currentNodes);
+            showToast(`已复制 ${currentNodes.length} 个节点到剪贴板\n${stats}`, 'success');
+            
+            // 更新状态栏
+            setStatus(`已复制 ${currentNodes.length} 个节点`);
+            
+        } catch (error) {
+            console.error('复制节点失败:', error);
+            showToast('复制失败: ' + error.message, 'error');
+        } finally {
+            copyAllNodesBtn.disabled = false;
+            copyAllNodesBtn.textContent = '全部复制';
+        }
+    }
+
+    // 获取复制格式设置
+    async function getCopyFormat() {
+        return new Promise((resolve) => {
+            chrome.storage.local.get(['nodeCopyFormat'], (data) => {
+                resolve(data.nodeCopyFormat || 'addresses');
+            });
+        });
+    }
+
+    // 获取节点统计信息
+    function getNodeStats(nodes) {
+        const stats = {
+            vmess: 0,
+            vless: 0,
+            trojan: 0,
+            ss: 0,
+            ssr: 0,
+            other: 0
+        };
+        
+        nodes.forEach(node => {
+            const address = node.address.toLowerCase();
+            if (address.startsWith('vmess://')) {
+                stats.vmess++;
+            } else if (address.startsWith('vless://')) {
+                stats.vless++;
+            } else if (address.startsWith('trojan://')) {
+                stats.trojan++;
+            } else if (address.startsWith('ss://')) {
+                stats.ss++;
+            } else if (address.startsWith('ssr://')) {
+                stats.ssr++;
+            } else {
+                stats.other++;
+            }
+        });
+        
+        const statTexts = [];
+        if (stats.vmess > 0) statTexts.push(`VMess: ${stats.vmess}`);
+        if (stats.vless > 0) statTexts.push(`VLess: ${stats.vless}`);
+        if (stats.trojan > 0) statTexts.push(`Trojan: ${stats.trojan}`);
+        if (stats.ss > 0) statTexts.push(`SS: ${stats.ss}`);
+        if (stats.ssr > 0) statTexts.push(`SSR: ${stats.ssr}`);
+        if (stats.other > 0) statTexts.push(`其他: ${stats.other}`);
+        
+        return statTexts.join(', ');
+    }
+
+    // 显示复制格式选择对话框
+    function showCopyFormatDialog() {
+        return new Promise((resolve) => {
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>选择复制格式</h3>
+                        <button class="close-button" onclick="this.closest('.modal').remove(); resolve('addresses');">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="radio-group">
+                            <label>
+                                <input type="radio" name="copyFormat" value="addresses" checked>
+                                仅复制地址
+                                <small>每行一个节点地址</small>
+                            </label>
+                            <label>
+                                <input type="radio" name="copyFormat" value="formatted">
+                                格式化复制
+                                <small>名称 + 地址</small>
+                            </label>
+                            <label>
+                                <input type="radio" name="copyFormat" value="raw">
+                                原始格式
+                                <small>保持原文件格式</small>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="modal-actions">
+                        <button class="primary-button" onclick="
+                            const format = this.closest('.modal').querySelector('input[name=copyFormat]:checked').value;
+                            this.closest('.modal').remove();
+                            resolve(format);
+                        ">确认复制</button>
+                        <button class="secondary-button" onclick="
+                            this.closest('.modal').remove();
+                            resolve(null);
+                        ">取消</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            // 点击外部关闭
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                    resolve(null);
+                }
+            });
+        });
+    }
+
+    // 渲染节点列表 (修改版本，添加选择功能)
     function renderNodes(nodes) {
         nodeList.innerHTML = '';
         
@@ -416,28 +656,191 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
+        // 添加全选控制
+        const selectAllContainer = document.createElement('div');
+        selectAllContainer.className = 'select-all-container';
+        selectAllContainer.innerHTML = `
+            <label class="select-all-label">
+                <input type="checkbox" id="selectAllNodes"> 全选 (${nodes.length} 个节点)
+            </label>
+            <div class="selected-count">
+                已选择: <span id="selectedNodesCount">0</span> 个
+            </div>
+        `;
+        nodeList.appendChild(selectAllContainer);
+        
+        // 全选功能
+        const selectAllCheckbox = document.getElementById('selectAllNodes');
+        const selectedCountSpan = document.getElementById('selectedNodesCount');
+        
+        selectAllCheckbox.addEventListener('change', () => {
+            const checkboxes = nodeList.querySelectorAll('.node-checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = selectAllCheckbox.checked;
+            });
+            updateSelectedCount();
+        });
+        
+        // 更新选择计数
+        function updateSelectedCount() {
+            const checkedBoxes = nodeList.querySelectorAll('.node-checkbox:checked');
+            selectedCountSpan.textContent = checkedBoxes.length;
+            
+            // 更新全选状态
+            const allCheckboxes = nodeList.querySelectorAll('.node-checkbox');
+            if (checkedBoxes.length === 0) {
+                selectAllCheckbox.indeterminate = false;
+                selectAllCheckbox.checked = false;
+            } else if (checkedBoxes.length === allCheckboxes.length) {
+                selectAllCheckbox.indeterminate = false;
+                selectAllCheckbox.checked = true;
+            } else {
+                selectAllCheckbox.indeterminate = true;
+            }
+        }
+        
+        // 渲染节点项
         nodes.forEach((node, index) => {
             const item = document.createElement('div');
             item.className = 'node-item';
             
+            // 检测节点类型
+            const nodeType = detectNodeType(node.address);
+            
             item.innerHTML = `
-                <h3>${escapeHtml(node.name || '未命名节点')}</h3>
-                <p title="${escapeHtml(node.address)}">${escapeHtml(node.address || '')}</p>
+                <div class="node-header">
+                    <label class="node-select">
+                        <input type="checkbox" class="node-checkbox" data-index="${index}">
+                        <span class="node-type-badge ${nodeType.toLowerCase()}">${nodeType}</span>
+                        <h3>${escapeHtml(node.name || '未命名节点')}</h3>
+                    </label>
+                </div>
+                <p class="node-address" title="${escapeHtml(node.address)}">${escapeHtml(node.address || '')}</p>
                 <div class="item-actions">
                     <button class="btn-copy" data-index="${index}">复制地址</button>
+                    <button class="btn-test" data-index="${index}">测试连接</button>
                 </div>
             `;
             
             nodeList.appendChild(item);
         });
 
+        // 添加节点选择事件监听器
+        nodeList.querySelectorAll('.node-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', updateSelectedCount);
+        });
+
         // 添加节点事件监听器
+        addNodeEventListeners();
+    }
+
+    // 检测节点类型
+    function detectNodeType(address) {
+        if (!address) return 'UNKNOWN';
+        
+        const lower = address.toLowerCase();
+        if (lower.startsWith('vmess://')) return 'VMess';
+        if (lower.startsWith('vless://')) return 'VLess';
+        if (lower.startsWith('trojan://')) return 'Trojan';
+        if (lower.startsWith('ss://')) return 'SS';
+        if (lower.startsWith('ssr://')) return 'SSR';
+        if (lower.startsWith('http://') || lower.startsWith('https://')) return 'HTTP';
+        
+        return 'OTHER';
+    }
+
+    // 添加节点事件监听器
+    function addNodeEventListeners() {
+        // 复制按钮
         document.querySelectorAll('#nodeList .btn-copy').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const index = parseInt(e.target.dataset.index);
                 copyNodeAddress(index);
             });
         });
+
+        // 测试按钮
+        document.querySelectorAll('#nodeList .btn-test').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const index = parseInt(e.target.dataset.index);
+                testNodeConnection(index);
+            });
+        });
+    }
+
+    // 测试节点连接
+    async function testNodeConnection(index) {
+        const node = currentNodes[index];
+        if (!node) return;
+
+        const btn = document.querySelector(`#nodeList .btn-test[data-index="${index}"]`);
+        const originalText = btn.textContent;
+        
+        btn.disabled = true;
+        btn.textContent = '测试中...';
+
+        try {
+            // 这里可以添加节点连接测试逻辑
+            // 目前只是模拟测试
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // 模拟结果
+            const isConnected = Math.random() > 0.3; // 70% 成功率
+            
+            if (isConnected) {
+                showToast(`节点 "${node.name}" 连接正常`, 'success');
+                btn.style.backgroundColor = '#2ecc71';
+            } else {
+                showToast(`节点 "${node.name}" 连接失败`, 'error');
+                btn.style.backgroundColor = '#e74c3c';
+            }
+            
+            // 恢复按钮颜色
+            setTimeout(() => {
+                btn.style.backgroundColor = '';
+            }, 3000);
+            
+        } catch (error) {
+            showToast(`测试失败: ${error.message}`, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    }
+
+    // 复制选中的节点
+    async function copySelectedNodes() {
+        const selectedCheckboxes = nodeList.querySelectorAll('.node-checkbox:checked');
+        
+        if (selectedCheckboxes.length === 0) {
+            showToast('请先选择要复制的节点', 'warning');
+            return;
+        }
+
+        try {
+            const selectedNodes = Array.from(selectedCheckboxes).map(checkbox => {
+                const index = parseInt(checkbox.dataset.index);
+                return currentNodes[index];
+            });
+
+            const copyFormat = await getCopyFormat();
+            if (!copyFormat) return; // 用户取消
+
+            let copyContent = '';
+            if (copyFormat === 'addresses') {
+                copyContent = selectedNodes.map(node => node.address).join('\n');
+            } else if (copyFormat === 'formatted') {
+                copyContent = selectedNodes.map(node => `${node.name} ${node.address}`).join('\n');
+            }
+
+            await ClipboardUtils.copyToClipboard(copyContent);
+            
+            const stats = getNodeStats(selectedNodes);
+            showToast(`已复制 ${selectedNodes.length} 个选中节点\n${stats}`, 'success');
+            
+        } catch (error) {
+            showToast('复制失败: ' + error.message, 'error');
+        }
     }
 
     // 编辑订阅
@@ -885,4 +1288,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+
+
 

@@ -400,3 +400,191 @@ input[type="checkbox"] {
     max-height: 100px;
 }
 
+/* 节点选择相关样式 */
+.select-all-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background-color: var(--bg-color);
+    border-radius: 4px;
+    margin-bottom: 10px;
+    border: 1px solid var(--border-color);
+}
+
+.select-all-label {
+    display: flex;
+    align-items: center;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.select-all-label input[type="checkbox"] {
+    margin-right: 8px;
+}
+
+.selected-count {
+    font-size: 12px;
+    color: #666;
+}
+
+/* 节点项头部 */
+.node-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.node-select {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    flex: 1;
+}
+
+.node-checkbox {
+    margin-right: 10px;
+}
+
+/* 节点类型徽章 */
+.node-type-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: bold;
+    color: white;
+    margin-right: 8px;
+    min-width: 50px;
+    text-align: center;
+}
+
+.node-type-badge.vmess { background-color: #3498db; }
+.node-type-badge.vless { background-color: #2ecc71; }
+.node-type-badge.trojan { background-color: #e74c3c; }
+.node-type-badge.ss { background-color: #f39c12; }
+.node-type-badge.ssr { background-color: #9b59b6; }
+.node-type-badge.http { background-color: #1abc9c; }
+.node-type-badge.other { background-color: #95a5a6; }
+.node-type-badge.unknown { background-color: #7f8c8d; }
+
+/* 节点地址样式 */
+.node-address {
+    background-color: var(--bg-color);
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    color: #666;
+    margin-bottom: 5px;
+    word-break: break-all;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 右键菜单样式 */
+.context-menu {
+    background-color: white;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    padding: 4px 0;
+    min-width: 120px;
+}
+
+.context-menu-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background-color 0.2s;
+}
+
+.context-menu-item:hover {
+    background-color: var(--bg-color);
+}
+
+.context-menu-divider {
+    height: 1px;
+    background-color: var(--border-color);
+    margin: 4px 0;
+}
+
+/* 单选框组样式 */
+.radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.radio-group label {
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    transition: border-color 0.2s;
+}
+
+.radio-group label:hover {
+    border-color: var(--primary-color);
+}
+
+.radio-group label input[type="radio"] {
+    margin-bottom: 5px;
+}
+
+.radio-group label small {
+    color: #666;
+    font-size: 11px;
+}
+
+/* 测试按钮特殊样式 */
+.btn-test {
+    background-color: var(--warning-color);
+    color: white;
+    transition: background-color 0.3s;
+}
+
+.btn-test:hover {
+    background-color: #e67e22;
+}
+
+/* 复制按钮增强 */
+#copyAllNodesBtn {
+    position: relative;
+}
+
+#copyAllNodesBtn:disabled {
+    opacity: 0.6;
+}
+
+/* 动画效果 */
+@keyframes nodeHighlight {
+    0% { background-color: transparent; }
+    50% { background-color: rgba(52, 152, 219, 0.1); }
+    100% { background-color: transparent; }
+}
+
+.node-item.highlight {
+    animation: nodeHighlight 1s ease;
+}
+
+/* 响应式适配 */
+@media (max-width: 400px) {
+    .select-all-container {
+        flex-direction: column;
+        gap: 5px;
+        align-items: flex-start;
+    }
+    
+    .node-type-badge {
+        font-size: 9px;
+        padding: 1px 4px;
+        min-width: 40px;
+    }
+    
+    .node-address {
+        font-size: 10px;
+    }
+}
+
