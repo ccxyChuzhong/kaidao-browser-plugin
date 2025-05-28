@@ -1,0 +1,92 @@
+# .github/workflows/create-release.yml
+
+name: Create Release with Zip Archive
+
+# 允许手动触发此工作流程
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号 (例如: 1.0.0 或 v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+      release_notes:
+        description: '发行说明 (可选，支持 Markdown)'
+        required: false
+        default: '这是一个自动创建的发行版。'
+      is_prerelease:
+        description: '标记为预发行版?'
+        type: boolean
+        required: false
+        default: false
+
+jobs:
+  build_and_release:
+    name: Build and Create Release
+    runs-on: ubuntu-latest # 使用最新的 Ubuntu 运行器
+
+    # 为作业设置权限，以便它可以创建发布和写入内容
+    permissions:
+      contents: write # 允许检出代码、创建标签和发布
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4 # 检出您的代码库
+
+      - name: Set up environment variables
+        id: vars
+        run: |
+          # 确保版本号以 'v' 开头，如果用户没有提供
+          VERSION_INPUT="${{ github.event.inputs.version }}"
+          if [[ "$VERSION_INPUT" != v* ]]; then
+            VERSION_TAG="v$VERSION_INPUT"
+          else
+            VERSION_TAG="$VERSION_INPUT"
+          fi
+          echo "VERSION_TAG=$VERSION_TAG" >> $GITHUB_ENV
+          
+          # 获取仓库名称作为压缩包名称的一部分 (可选，也可以硬编码)
+          REPO_NAME=$(echo "${{ github.repository }}" | awk -F / '{print $2}')
+          echo "REPO_NAME=$REPO_NAME" >> $GITHUB_ENV
+          echo "ARCHIVE_NAME=${REPO_NAME}-${VERSION_TAG}.zip" >> $GITHUB_ENV
+          echo "RELEASE_NAME=Release $VERSION_TAG" >> $GITHUB_ENV
+
+      - name: Create Zip Archive
+        run: |
+          echo "正在创建压缩包: ${{ env.ARCHIVE_NAME }}"
+          # 将当前目录所有内容 (除了 .git 目录和压缩包本身) 压缩
+          # 使用 -x 排除 .git 目录和将要创建的 zip 文件，避免递归
+          zip -r "${{ env.ARCHIVE_NAME }}" . -x ".git/*" -x "${{ env.ARCHIVE_NAME }}"
+        # 如果你的插件有构建步骤，应该在这里添加构建命令，
+        # 例如 npm run build，然后再压缩构建产物。
+        # 如果只是压缩整个项目源文件，上面的命令即可。
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # 这是自动提供的
+        with:
+          tag_name: ${{ env.VERSION_TAG }}
+          release_name: ${{ env.RELEASE_NAME }}
+          body: |
+            ${{ github.event.inputs.release_notes }}
+            
+            ---
+            自动打包的压缩文件: `${{ env.ARCHIVE_NAME }}`
+          draft: false
+          prerelease: ${{ github.event.inputs.is_prerelease }}
+
+      - name: Upload Release Asset (Zip Archive)
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }} # 从上一步获取上传 URL
+          asset_path: ./${{ env.ARCHIVE_NAME }} # 要上传的压缩包路径
+          asset_name: ${{ env.ARCHIVE_NAME }} # 在 Release 中显示的附件名称
+          asset_content_type: application/zip # 附件的 MIME 类型
+
+      - name: Cleanup Zip Archive
+        if: always() # 无论成功与否都执行清理
+        run: rm -f "${{ env.ARCHIVE_NAME }}"
