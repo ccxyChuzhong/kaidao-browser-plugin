@@ -20,29 +20,53 @@ document.addEventListener('DOMContentLoaded', () => {
         proxyTestResult.textContent = '';
         
         try {
-            // 使用一个简单的HTTP网站测试代理
-            const testUrl = 'http://httpbin.org/ip';
+            // 使用几个不同的测试URL，增加成功率
+            const testUrls = [
+                'http://www.gstatic.com/generate_204',
+                'http://www.msftconnecttest.com/connecttest.txt',
+                'http://cp.cloudflare.com/',
+                'http://www.baidu.com/favicon.ico'
+            ];
             
-            const response = await new Promise((resolve, reject) => {
-                chrome.runtime.sendMessage({
-                    action: 'checkSubscriptionWithProxy',
-                    url: testUrl,
-                    proxyUrl: proxyUrl,
-                    timeout: 5000
-                }, (response) => {
-                    if (chrome.runtime.lastError) {
-                        reject(new Error(chrome.runtime.lastError.message));
-                    } else if (response.success) {
-                        resolve(response.content);
-                    } else {
-                        reject(new Error(response.error));
-                    }
-                });
-            });
+            let success = false;
+            let errorMsg = '';
             
-            proxyTestResult.textContent = '✓ 代理连接正常';
-            proxyTestResult.style.color = '#2ecc71';
-            showToast('代理测试成功');
+            // 依次尝试不同的URL
+            for (const testUrl of testUrls) {
+                try {
+                    const response = await new Promise((resolve, reject) => {
+                        chrome.runtime.sendMessage({
+                            action: 'checkSubscriptionWithProxy',
+                            url: testUrl,
+                            proxyUrl: proxyUrl,
+                            timeout: 5000
+                        }, (response) => {
+                            if (chrome.runtime.lastError) {
+                                reject(new Error(chrome.runtime.lastError.message));
+                            } else if (response.success) {
+                                resolve(response.content);
+                            } else {
+                                reject(new Error(response.error));
+                            }
+                        });
+                    });
+                    
+                    success = true;
+                    break;
+                } catch (err) {
+                    errorMsg = err.message;
+                    console.warn(`测试URL ${testUrl} 失败:`, err.message);
+                    // 继续尝试下一个URL
+                }
+            }
+            
+            if (success) {
+                proxyTestResult.textContent = '✓ 代理连接正常';
+                proxyTestResult.style.color = '#2ecc71';
+                showToast('代理测试成功');
+            } else {
+                throw new Error(errorMsg);
+            }
             
         } catch (error) {
             proxyTestResult.textContent = `✗ 代理测试失败: ${error.message}`;
@@ -744,6 +768,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (lower.startsWith('trojan://')) return 'Trojan';
         if (lower.startsWith('ss://')) return 'SS';
         if (lower.startsWith('ssr://')) return 'SSR';
+        if (lower.startsWith('hysteria://')) return 'Hysteria';
+        if (lower.startsWith('hysteria2://')) return 'Hysteria2';
         if (lower.startsWith('http://') || lower.startsWith('https://')) return 'HTTP';
         
         return 'OTHER';
