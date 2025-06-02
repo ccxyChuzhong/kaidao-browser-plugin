@@ -7,7 +7,9 @@
     "storage",
     "clipboardWrite",
     "proxy",
-    "activeTab"
+    "activeTab",
+    "tabs",
+    "system.memory"
   ],
   "action": {
     "default_popup": "popup/popup.html",
